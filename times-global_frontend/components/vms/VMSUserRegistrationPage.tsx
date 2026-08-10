@@ -1,4 +1,5 @@
 import React, { useState, ChangeEvent, FormEvent, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Input from '../common/Input';
 import Button from '../common/Button';
 import { apiService } from '../../services/apiService';
@@ -20,6 +21,7 @@ interface ApiResponse<T> {
 const idTypes: string[] = ['Visitor', 'Staff', 'Contractor', 'Other'];
 
 const VMSUserRegistrationPage: React.FC = () => { 
+  const navigate = useNavigate();
   const [uploadFullName, setUploadFullName] = useState<string>('');
   const [uploadContact, setUploadContact] = useState<string>(''); 
   const [uploadEmail, setUploadEmail] = useState<string>('');     
@@ -35,6 +37,7 @@ const VMSUserRegistrationPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null); 
   const [tableError, setTableError] = useState<string | null>(null); 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [lastRegisteredUser, setLastRegisteredUser] = useState<RegisteredUser | null>(null);
 
   const [editingUser, setEditingUser] = useState<RegisteredUser | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
@@ -109,8 +112,13 @@ const VMSUserRegistrationPage: React.FC = () => {
     formData.append('email', uploadEmail);     
     
     try {
-      await apiService.post('/images/', formData, true); 
+      const createdUser = await apiService.post<RegisteredUser>('/images/', formData, true); 
       setSuccessMessage(`User ${uploadFullName} (${uploadIdType}) registered successfully!`);
+      if (createdUser) {
+        setLastRegisteredUser(createdUser);
+      } else {
+        setLastRegisteredUser(null);
+      }
       fetchRegisteredUsers(); 
       
       setUploadFullName('');
@@ -129,6 +137,21 @@ const VMSUserRegistrationPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleAddVisitorRecord = (user: RegisteredUser) => {
+    navigate('/vms/add-record', {
+      state: {
+        registeredUser: {
+          id: user.id,
+          fullName: user.fullName,
+          idType: user.idType,
+          contact: user.contact || '',
+          email: user.email || '',
+          imageFile: user.imageFile,
+        },
+      },
+    });
   };
   
   const handleSearchSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -245,6 +268,17 @@ const VMSUserRegistrationPage: React.FC = () => {
 
       <div className="flex-grow p-2 space-y-2 sm:space-y-3 md:space-y-4 overflow-y-auto">
         {successMessage && <p role="alert" aria-live="polite" className="text-center text-green-300 bg-green-800/70 p-2 rounded mb-2">{successMessage}</p>}
+        {lastRegisteredUser && (
+          <div className="flex justify-center">
+            <Button
+              type="button"
+              onClick={() => handleAddVisitorRecord(lastRegisteredUser)}
+              className="bg-blue-600 hover:bg-blue-700 text-white !px-4 !py-2 text-sm"
+            >
+              Add Visitor Record for {lastRegisteredUser.fullName}
+            </Button>
+          </div>
+        )}
         
         <section className="p-2 sm:p-3 md:p-4 bg-slate-700 bg-opacity-60 backdrop-blur-md rounded-lg shadow border border-gray-700">
           <h3 className="text-lg font-semibold text-red-500 mb-2 sm:mb-3">Add New User/Image</h3>
@@ -319,6 +353,7 @@ const VMSUserRegistrationPage: React.FC = () => {
                     <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 whitespace-nowrap text-xs text-gray-300">{user.contact || 'N/A'}</td>
                     <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 whitespace-nowrap text-xs text-gray-300">{user.email || 'N/A'}</td>
                     <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 whitespace-nowrap text-xs">
+                      <Button onClick={() => handleAddVisitorRecord(user)} className="!px-2 !py-1 text-xs bg-green-600 hover:bg-green-700 text-white mr-1">Add Record</Button>
                       <Button onClick={() => handleEdit(user)} className="!px-2 !py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white mr-1">Edit</Button>
                       <Button onClick={() => handleDelete(user.id)} className="!px-2 !py-1 text-xs bg-red-600 hover:bg-red-700 text-white">Delete</Button>
                     </td>

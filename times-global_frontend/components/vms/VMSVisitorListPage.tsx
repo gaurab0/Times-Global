@@ -37,8 +37,9 @@ const VMSVisitorListPage: React.FC = () => {
   const [searchName, setSearchName] = useState<string>('');
   
   const [visitors, setVisitors] = useState<Visitor[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasGeneratedReportOutput, setHasGeneratedReportOutput] = useState<boolean>(false);
 
   const [todaysVisitors, setTodaysVisitors] = useState<Visitor[]>([]);
   const [isLoadingTodaysVisitors, setIsLoadingTodaysVisitors] = useState<boolean>(true);
@@ -115,16 +116,19 @@ const VMSVisitorListPage: React.FC = () => {
   }, [selectedLocation]); // Depend on selectedLocation
 
   const fetchVisitors = useCallback(async () => {
-    if (!selectedLocation?.id && (dateFrom || dateTo || searchName)) { // Require location if filtering
+    setHasGeneratedReportOutput(true);
+
+    if (!selectedLocation?.id) { // Require location if filtering
         setError("A location must be selected to filter visitors.");
         setVisitors([]);
         setIsLoading(false);
         return;
     }
-    if (!selectedLocation?.id && !dateFrom && !dateTo && !searchName) { // No location and no filters, show nothing or specific message
-        setVisitors([]); // Clear previous results
+
+    if (!dateFrom && !dateTo && !searchName.trim()) {
+        setError("Please enter a name or select a date range to display report output.");
+        setVisitors([]);
         setIsLoading(false);
-        // setError("Please select a location or apply filters."); // Optional: prompt user
         return;
     }
 
@@ -155,7 +159,6 @@ const VMSVisitorListPage: React.FC = () => {
     // ProtectedRoute should ensure selectedLocation exists if this page is rendered.
     if (selectedLocation) {
         fetchTodaysVisitors();
-        fetchVisitors(); 
     } else {
         // Handle case where page might be rendered without selectedLocation (should ideally be prevented by router)
         setIsLoadingTodaysVisitors(false);
@@ -164,10 +167,19 @@ const VMSVisitorListPage: React.FC = () => {
         setVisitors([]);
         // Optional: set a message if needed, but router should prevent this state.
     }
-  }, [fetchTodaysVisitors, fetchVisitors, selectedLocation]);
+    setHasGeneratedReportOutput(false);
+  }, [fetchTodaysVisitors, selectedLocation]);
 
   const handleFilterByDate = () => fetchVisitors();
   const handleSearchByName = () => fetchVisitors();
+  const handleClearFilters = () => {
+    setDateFrom('');
+    setDateTo('');
+    setSearchName('');
+    setVisitors([]);
+    setError(null);
+    setHasGeneratedReportOutput(false);
+  };
 
   const handleCheckOut = async (visitorId: string) => {
     if (!window.confirm('Are you sure you want to check out this visitor?')) return;
@@ -246,15 +258,15 @@ const VMSVisitorListPage: React.FC = () => {
     }
   };
 
-  const renderVisitorTable = (visitorList: Visitor[], listType: 'today' | 'historical') => {
+  const renderVisitorTable = (visitorList: Visitor[], listType: 'today' | 'report') => {
     // If ProtectedRoute is working, we assume the user is approved and has a location.
     // Error messages are for API failures.
     if (!visitorList || visitorList.length === 0) {
       if (listType === 'today' && !isLoadingTodaysVisitors && !todaysVisitorsError) {
           return <p className="px-3 py-10 text-center text-sm text-gray-400">No visitors checked in today for {selectedLocation?.name || 'the selected location'}.</p>;
       }
-      if (listType === 'historical' && !isLoading && !error) {
-        return <p className="px-3 py-10 text-center text-sm text-gray-400">No visitors found{ (searchName || dateFrom || dateTo) ? ' for the current filters' : `for ${selectedLocation?.name || 'the selected location'}`}.</p>;
+      if (listType === 'report' && !isLoading && !error && hasGeneratedReportOutput) {
+        return <p className="px-3 py-10 text-center text-sm text-gray-400">No report output found for the current filters.</p>;
       }
       return null; // Let loading/error messages handle other states
     }
@@ -265,7 +277,20 @@ const VMSVisitorListPage: React.FC = () => {
             <th scope="col" className="px-1.5 py-1.5 sm:px-2 sm:py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Image</th>
             <th scope="col" className="px-1.5 py-1.5 sm:px-2 sm:py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">ID Number/Type</th>
             <th scope="col" className="px-1.5 py-1.5 sm:px-2 sm:py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Full Name</th>
+            {listType === 'report' && (
+              <>
+                <th scope="col" className="px-1.5 py-1.5 sm:px-2 sm:py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Contact</th>
+                <th scope="col" className="px-1.5 py-1.5 sm:px-2 sm:py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Email</th>
+              </>
+            )}
             <th scope="col" className="px-1.5 py-1.5 sm:px-2 sm:py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Reason</th>
+            {listType === 'report' && (
+              <>
+                <th scope="col" className="px-1.5 py-1.5 sm:px-2 sm:py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Approved By</th>
+                <th scope="col" className="px-1.5 py-1.5 sm:px-2 sm:py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Requested By</th>
+                <th scope="col" className="px-1.5 py-1.5 sm:px-2 sm:py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Request Source</th>
+              </>
+            )}
             <th scope="col" className="px-1.5 py-1.5 sm:px-2 sm:py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Check-In Time</th>
             <th scope="col" className="px-1.5 py-1.5 sm:px-2 sm:py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Check-Out Time</th>
             <th scope="col" className="px-1.5 py-1.5 sm:px-2 sm:py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
@@ -283,7 +308,20 @@ const VMSVisitorListPage: React.FC = () => {
               </td>
               <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 whitespace-nowrap text-xs text-gray-300">{visitor.idNumberType}</td>
               <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 whitespace-nowrap text-xs font-medium text-gray-100">{visitor.fullName}</td>
+              {listType === 'report' && (
+                <>
+                  <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 whitespace-nowrap text-xs text-gray-300">{visitor.contact || 'N/A'}</td>
+                  <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 whitespace-nowrap text-xs text-gray-300 truncate max-w-[100px] sm:max-w-[150px]">{visitor.email || 'N/A'}</td>
+                </>
+              )}
               <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 whitespace-nowrap text-xs text-gray-300 truncate max-w-[100px] sm:max-w-[150px]" title={visitor.reason || undefined}>{visitor.reason || 'N/A'}</td>
+              {listType === 'report' && (
+                <>
+                  <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 whitespace-nowrap text-xs text-gray-300">{visitor.approvedBy || 'N/A'}</td>
+                  <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 whitespace-nowrap text-xs text-gray-300">{visitor.requestedBy || 'N/A'}</td>
+                  <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 whitespace-nowrap text-xs text-gray-300">{visitor.requestSource || 'N/A'}</td>
+                </>
+              )}
               <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 whitespace-nowrap text-xs text-gray-300">{formatDate(visitor.checkInTime)}</td>
               <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 whitespace-nowrap text-xs text-gray-300">{formatDate(visitor.checkOutTime)}</td>
               <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 whitespace-nowrap text-xs font-medium">
@@ -341,17 +379,22 @@ const VMSVisitorListPage: React.FC = () => {
               <Button onClick={handleSearchByName} className="!px-3 md:!px-4 !py-2 text-sm w-full md:w-auto md:self-end">Search by Name</Button>
             </div>
           </div>
+          <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <p className="text-xs text-gray-300">Report output appears here only after applying a date filter or name search.</p>
+            <Button onClick={handleClearFilters} variant="secondary" className="!px-3 !py-2 text-sm w-full sm:w-auto">Clear Report Output</Button>
+          </div>
         </div>
         
-        <div className="overflow-x-auto">
-          {isLoading && <p className="p-4 text-center text-gray-300">Loading filtered visitors...</p>}
-          {error && <p role="alert" aria-live="assertive" className="p-4 text-center text-red-400 bg-red-900/50 rounded m-2">{error}</p>}
-          {!isLoading && !error && (
+        {hasGeneratedReportOutput && (
+          <div className="overflow-x-auto">
             <div className="bg-slate-700 bg-opacity-60 backdrop-blur-md shadow-md rounded-lg overflow-hidden border border-gray-700">
-              {renderVisitorTable(visitors, 'historical')}
+              <h3 className="text-lg font-semibold text-gray-100 p-2 sm:p-3 border-b border-gray-700">Report Output</h3>
+              {isLoading && <p className="p-4 text-center text-gray-300">Loading report output...</p>}
+              {error && <p role="alert" aria-live="assertive" className="p-4 text-center text-red-400 bg-red-900/50 rounded m-2">{error}</p>}
+              {!isLoading && !error && renderVisitorTable(visitors, 'report')}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {isHistoryModalOpen && selectedVisitorForHistory && (

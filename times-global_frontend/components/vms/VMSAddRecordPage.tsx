@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useContext } from 'react'; 
+import React, { useState, useCallback, useContext, useEffect } from 'react'; 
+import { useLocation, useNavigate } from 'react-router-dom';
 import Input from '../common/Input';
 import Textarea from '../common/Textarea';
 import Button from '../common/Button';
@@ -25,6 +26,10 @@ interface PreRegisteredUser {
   imageFile?: string; 
 }
 
+interface AddRecordLocationState {
+  registeredUser?: PreRegisteredUser;
+}
+
 interface ApiResponse<T> {
   results?: T[];
   [key: string]: any; 
@@ -32,6 +37,9 @@ interface ApiResponse<T> {
 
 
 const VMSAddRecordPage: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const locationState = location.state as AddRecordLocationState | null;
   const initialFormData: FormData = {
     idNumberType: '',
     fullName: '',
@@ -48,25 +56,99 @@ const VMSAddRecordPage: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [userLookupError, setUserLookupError] = useState<string | null>(null);
   const [isUserPreRegistered, setIsUserPreRegistered] = useState<boolean | null>(null);
+  const [userSuggestions, setUserSuggestions] = useState<PreRegisteredUser[]>([]);
+  const [isSuggestionsLoading, setIsSuggestionsLoading] = useState<boolean>(false);
+  const [showUserSuggestions, setShowUserSuggestions] = useState<boolean>(false);
 
   const { selectedLocation } = useContext(LocationContext); // Get selectedLocation
 
+  const applyRegisteredUserToForm = useCallback((registeredUser: PreRegisteredUser, message?: string) => {
+    setFormData((prev: FormData) => ({
+      ...prev,
+      fullName: registeredUser.fullName || '',
+      idNumberType: registeredUser.idType || '',
+      contact: registeredUser.contact || '',
+      email: registeredUser.email || '',
+    }));
+    setIsUserPreRegistered(true);
+    setUserLookupError(null);
+    setUserSuggestions([]);
+    setShowUserSuggestions(false);
+    if (message) {
+      setSuccessMessage(message);
+    }
+  }, []);
+
+  useEffect(() => {
+    const registeredUser = locationState?.registeredUser;
+
+    if (!registeredUser) return;
+
+    applyRegisteredUserToForm(
+      registeredUser,
+      `Visitor details loaded for ${registeredUser.fullName}. Complete the visit details and check in.`
+    );
+    navigate(location.pathname, { replace: true, state: null });
+  }, [applyRegisteredUserToForm, location.pathname, locationState?.registeredUser, navigate]);
+
+  useEffect(() => {
+    const query = formData.fullName.trim();
+
+    if (!query) {
+      setUserSuggestions([]);
+      setShowUserSuggestions(false);
+      setIsSuggestionsLoading(false);
+      return;
+    }
+
+    if (isUserPreRegistered === true) {
+      setIsSuggestionsLoading(false);
+      return;
+    }
+
+    let isActive = true;
+    setIsSuggestionsLoading(true);
+    setShowUserSuggestions(true);
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const data = await apiService.get<PreRegisteredUser[] | ApiResponse<PreRegisteredUser>>(`/images/?search=${encodeURIComponent(query)}`);
+        if (!isActive) return;
+
+        const users: PreRegisteredUser[] = Array.isArray(data) ? data : (data?.results || []);
+        setUserSuggestions(users);
+      } catch (err: any) {
+        if (!isActive) return;
+        console.error('User suggestion lookup error:', err);
+        setUserSuggestions([]);
+      } finally {
+        if (isActive) {
+          setIsSuggestionsLoading(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [formData.fullName, isUserPreRegistered]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData((prev: FormData) => ({ ...prev, [name]: value }));
     if (name === "fullName") { 
-        setIsUserPreRegistered(null);
-        setUserLookupError(null);
-        if (isUserPreRegistered !== null) { 
-            setFormData((prev: FormData) => ({
-                ...prev,
-                idNumberType: '',
-                contact: '',
-                email: '',
-            }));
-        }
+      setFormData((prev: FormData) => ({
+        ...prev,
+        fullName: value,
+        ...(isUserPreRegistered !== null ? { idNumberType: '', contact: '', email: '' } : {}),
+      }));
+      setIsUserPreRegistered(null);
+      setUserLookupError(null);
+      setSuccessMessage(null);
+      setShowUserSuggestions(Boolean(value.trim()));
+      return;
     }
+    setFormData((prev: FormData) => ({ ...prev, [name]: value }));
   };
 
   const fetchPreRegisteredUserDetails = useCallback(async (name: string) => {
@@ -89,14 +171,7 @@ const VMSAddRecordPage: React.FC = () => {
       
       if (users.length > 0) {
         const foundUser = users[0];
-        setFormData((prev: FormData) => ({
-          ...prev,
-          fullName: prev.fullName, 
-          idNumberType: foundUser.idType || '',
-          contact: foundUser.contact || '', 
-          email: foundUser.email || '',   
-        }));
-        setIsUserPreRegistered(true);
+        applyRegisteredUserToForm({ ...foundUser, fullName: name });
       } else {
         setUserLookupError(`User '${name}' not found or not pre-registered. Please register first for auto-filled details, or proceed with manual entry.`);
         setFormData((prev: FormData) => ({
@@ -112,10 +187,14 @@ const VMSAddRecordPage: React.FC = () => {
       setUserLookupError(`Error looking up user: ${err.message}. Proceed with manual entry.`);
       setIsUserPreRegistered(false);
     }
-  }, []);
+  }, [applyRegisteredUserToForm]);
 
   const handleFullNameBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const currentFullName = e.target.value;
+    window.setTimeout(() => setShowUserSuggestions(false), 150);
+    if (isUserPreRegistered === true) {
+      return;
+    }
     if (currentFullName.trim()) { 
         fetchPreRegisteredUserDetails(currentFullName.trim());
     } else { 
@@ -162,6 +241,8 @@ const VMSAddRecordPage: React.FC = () => {
       setFormData(initialFormData); 
       setIsUserPreRegistered(null);
       setUserLookupError(null);
+      setUserSuggestions([]);
+      setShowUserSuggestions(false);
     } catch (err: any) {
       console.error('Add Visitor Error:', err);
       if (err.status === 400 && err.data) {
@@ -194,18 +275,55 @@ const VMSAddRecordPage: React.FC = () => {
           
           <div>
             <label htmlFor="fullName" className={labelStyles}>Full Name:</label>
-            <Input
-              type="text"
-              id="fullName"
-              name="fullName"
-              value={formData.fullName}
-              onChange={handleChange}
-              onBlur={handleFullNameBlur} 
-              className={inputStyles}
-              placeholder="Type full name and tab out to find registered user"
-              required
-            />
-            {isUserPreRegistered === null && formData.fullName.trim() && !userLookupError && <p className="text-xs text-yellow-400 mt-1">Looking up user...</p>}
+            <div className="relative">
+              <Input
+                type="text"
+                id="fullName"
+                name="fullName"
+                value={formData.fullName}
+                onChange={handleChange}
+                onFocus={() => {
+                  if (formData.fullName.trim() && isUserPreRegistered !== true) {
+                    setShowUserSuggestions(true);
+                  }
+                }}
+                onBlur={handleFullNameBlur} 
+                className={inputStyles}
+                placeholder="Start typing a registered visitor name"
+                autoComplete="off"
+                required
+              />
+              {showUserSuggestions && formData.fullName.trim() && (
+                <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-md border border-gray-600 bg-gray-800 shadow-xl">
+                  {isSuggestionsLoading ? (
+                    <p className="px-3 py-2 text-xs text-yellow-300">Searching registered users...</p>
+                  ) : userSuggestions.length > 0 ? (
+                    userSuggestions.map((user: PreRegisteredUser) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => applyRegisteredUserToForm(user)}
+                        className="flex w-full items-center gap-3 border-b border-gray-700 px-3 py-2 text-left text-xs text-gray-100 transition-colors last:border-b-0 hover:bg-red-700 focus:bg-red-700 focus:outline-none"
+                      >
+                        {user.imageFile ? (
+                          <img src={user.imageFile} alt={user.fullName} className="h-8 w-8 shrink-0 rounded-md object-cover" />
+                        ) : (
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-700 text-[10px] text-gray-300">N/A</span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-semibold">{user.fullName}</span>
+                          <span className="block truncate text-gray-300">{user.idType}{user.contact ? ` | ${user.contact}` : ''}</span>
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="px-3 py-2 text-xs text-gray-300">No registered users found.</p>
+                  )}
+                </div>
+              )}
+            </div>
+            {isSuggestionsLoading && formData.fullName.trim() && !userLookupError && <p className="text-xs text-yellow-400 mt-1">Looking up user...</p>}
             {userLookupError && <p className="text-xs text-yellow-400 mt-1">{userLookupError}</p>}
             {isUserPreRegistered === true && <p className="text-xs text-green-400 mt-1">User details found and pre-filled where available.</p>}
           </div>
