@@ -9,9 +9,9 @@ const cspDirectives = [
   // 'unsafe-eval' for Babel Standalone for JSX transpilation
   "script-src 'self' https://cdn.tailwindcss.com https://esm.sh https://unpkg.com 'unsafe-inline' 'unsafe-eval'", 
   "style-src 'self' https://cdn.tailwindcss.com https://fonts.googleapis.com 'unsafe-inline'", 
-  "img-src 'self' http://192.168.55.193:8000 https://via.placeholder.com data: blob:", // Added backend domain for images
+  "img-src 'self' http://111.119.60.23/api https://via.placeholder.com data: blob:", // Added backend domain for images
   "font-src 'self' https://fonts.gstatic.com",
-  "connect-src 'self' http://192.168.55.193:8000", // Ensure this matches your HTTP backend API
+  "connect-src 'self' http://111.119.60.23/", // Ensure this matches your HTTP backend API
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

@@ -5,7 +5,7 @@ from datetime import timedelta
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-your-default-secret-key-here-for-locations')
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.55.61', '192.168.55.193', '192.168.1.71', '192.168.69.202','192.168.18.120']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '111.119.60.23','192.168.55.193']
 
 INSTALLED_APPS = [
     'django.contrib.admin',

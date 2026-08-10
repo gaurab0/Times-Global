@@ -1,9 +1,11 @@
 # StoredImage model is kept global as per thought process (user profile images).
 # No location ForeignKey here.
 from django.db import models
+import re
 
 def image_upload_path(instance, filename):
     identifier = instance.email if instance.email else instance.fullName.replace(" ", "_")
+    identifier = re.sub(r'[^a-zA-Z0-9_.-]', '_', identifier)
     return f'stored_images/{instance.idType.lower()}/{identifier}/{filename}'
 
 class StoredImage(models.Model):
