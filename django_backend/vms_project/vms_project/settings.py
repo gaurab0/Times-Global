@@ -59,23 +59,28 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'vms_project.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'vms_db'), # Consider new DB name or migration strategy
-        'USER': os.environ.get('DB_USER', 'vms_user'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'Dell@12345'),
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
+use_sqlite = os.environ.get('DJANGO_USE_SQLITE')
+if use_sqlite is None:
+    use_sqlite = 'True' if DEBUG else 'False'
+
+if use_sqlite == 'True':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / os.environ.get('SQLITE_DB_NAME', 'db_locations.sqlite3'),
+        }
     }
-}
-# SQLite alternative for local dev:
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db_locations.sqlite3', # Consider new DB name
-#     }
-# }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'vms_db'), # Consider new DB name or migration strategy
+            'USER': os.environ.get('DB_USER', 'vms_user'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', 'Dell@12345'),
+            'HOST': os.environ.get('DB_HOST', 'localhost'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+        }
+    }
 
 
 AUTH_PASSWORD_VALIDATORS = [

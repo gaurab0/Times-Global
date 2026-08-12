@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ../django_backend/vms_project/start_backend.ps1 -Background && vite",
+    "dev:frontend": "vite",
+    "dev:backend": "powershell -NoProfile -ExecutionPolicy Bypass -File ../django_backend/vms_project/start_backend.ps1",
     "build": "vite build",
     "preview": "vite preview"
   },

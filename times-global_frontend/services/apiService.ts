@@ -1,7 +1,8 @@
 import { getAuthToken, setAuthToken, getRefreshToken, removeAuthToken } from './tokenService';
 import { LocationInfo } from '../components/LocationContext'; // Import LocationInfo
 
-const BASE_URL = 'http://111.119.60.23/api'; 
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
+const BASE_URL = configuredApiBaseUrl.replace(/\/$/, '');
 
 interface ApiErrorData {
   detail?: string;
