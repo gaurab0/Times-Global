@@ -17,6 +17,7 @@ staticfiles/
 .venv/
 venv/
 ENV/
+myenv/
 
 # IDE / Editor
 .idea/
