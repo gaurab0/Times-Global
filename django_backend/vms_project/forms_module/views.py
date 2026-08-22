@@ -1,8 +1,26 @@
 from rest_framework import viewsets
+import django_filters
 from .models import DeviceStorageEntry, GatePass
 from .serializers import DeviceStorageEntrySerializer, GatePassSerializer
 from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import PermissionDenied
+
+
+class DeviceStorageEntryFilter(django_filters.FilterSet):
+    company_name = django_filters.CharFilter(field_name='submitter_company_name', lookup_expr='icontains')
+
+    class Meta:
+        model = DeviceStorageEntry
+        fields = ['company_name']
+
+
+class GatePassFilter(django_filters.FilterSet):
+    recipient_name = django_filters.CharFilter(lookup_expr='icontains')
+
+    class Meta:
+        model = GatePass
+        fields = ['recipient_name']
+
 
 class BaseLocationScopedViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -63,7 +81,9 @@ class BaseLocationScopedViewSet(viewsets.ModelViewSet):
 class DeviceStorageEntryViewSet(BaseLocationScopedViewSet):
     queryset = DeviceStorageEntry.objects.all().order_by('-date')
     serializer_class = DeviceStorageEntrySerializer
+    filterset_class = DeviceStorageEntryFilter
 
 class GatePassViewSet(BaseLocationScopedViewSet):
     queryset = GatePass.objects.all().order_by('-pass_date')
     serializer_class = GatePassSerializer
+    filterset_class = GatePassFilter

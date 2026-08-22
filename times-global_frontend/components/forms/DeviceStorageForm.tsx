@@ -83,6 +83,7 @@ const DeviceStorageForm: React.FC<DeviceStorageFormProps> = ({ onLogout }) => {
   const [previousReceipts, setPreviousReceipts] = useState<DeviceStorageResponseData[]>([]);
   const [isLoadingPreviousReceipts, setIsLoadingPreviousReceipts] = useState<boolean>(false);
   const [previousReceiptsError, setPreviousReceiptsError] = useState<string | null>(null);
+  const [previousReceiptsCompanySearch, setPreviousReceiptsCompanySearch] = useState<string>('');
   
   const [loadingActionId, setLoadingActionId] = useState<string | null>(null); // For View/Reprint loading
   const [actionTypeForLoading, setActionTypeForLoading] = useState<'View' | 'Reprint' | null>(null);
@@ -352,17 +353,22 @@ const DeviceStorageForm: React.FC<DeviceStorageFormProps> = ({ onLogout }) => {
   };
 
 
-  const fetchPreviousReceipts = async () => {
+  const fetchPreviousReceipts = async (companySearch = previousReceiptsCompanySearch) => {
     if (!selectedLocation?.id) return;
     setIsLoadingPreviousReceipts(true);
     setPreviousReceiptsError(null);
     try {
-      const response = await apiService.get<ApiResponse<DeviceStorageResponseData>>('/device-storage/');
+      const queryParams = new URLSearchParams();
+      const trimmedCompanySearch = companySearch.trim();
+      if (trimmedCompanySearch) {
+        queryParams.set('company_name', trimmedCompanySearch);
+      }
+      const endpoint = queryParams.toString() ? `/device-storage/?${queryParams.toString()}` : '/device-storage/';
+      const response = await apiService.get<ApiResponse<DeviceStorageResponseData>>(endpoint);
       setPreviousReceipts(response?.results || []);
     } catch (err: any) {
       console.error('Fetch Previous Receipts Error:', err);
       setPreviousReceiptsError(err.message || 'Failed to fetch previous receipts.');
-      setPreviousReceipts([]);
     } finally {
       setIsLoadingPreviousReceipts(false);
     }
@@ -370,10 +376,17 @@ const DeviceStorageForm: React.FC<DeviceStorageFormProps> = ({ onLogout }) => {
 
   const handleTogglePreviousReceiptsModal = () => {
     setShowPreviousReceiptsModal(prev => !prev);
-    if (!showPreviousReceiptsModal && selectedLocation?.id) { 
-      fetchPreviousReceipts();
-    }
   };
+
+  useEffect(() => {
+    if (!showPreviousReceiptsModal || !selectedLocation?.id) return;
+
+    const timeoutId = window.setTimeout(() => {
+      fetchPreviousReceipts(previousReceiptsCompanySearch);
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [showPreviousReceiptsModal, selectedLocation?.id, previousReceiptsCompanySearch]);
   
   const loadAndShowReceipt = async (receiptId: string, actionType: 'View' | 'Reprint') => {
     setActionTypeForLoading(actionType);
@@ -499,7 +512,7 @@ const DeviceStorageForm: React.FC<DeviceStorageFormProps> = ({ onLogout }) => {
                 className="bg-teal-600 hover:bg-teal-700"
                 disabled={!selectedLocation}
               >
-                View Previous Receipts
+                View / Search Previous Receipts
               </Button>
             </div>
 
@@ -650,17 +663,33 @@ const DeviceStorageForm: React.FC<DeviceStorageFormProps> = ({ onLogout }) => {
                   <h3 id="previousReceiptsModalTitle" className="text-2xl font-semibold text-red-500">Previous Device Storage Receipts</h3>
                   <Button type="button" onClick={handleTogglePreviousReceiptsModal} variant="secondary" className="!p-2">×</Button>
               </div>
-              {isLoadingPreviousReceipts && <p className="text-center text-gray-300">Loading previous receipts...</p>}
+              <div className="mb-4">
+                <label htmlFor="deviceStorageCompanySearch" className="block text-sm font-medium text-gray-300 mb-1">Search by company name</label>
+                <Input
+                  id="deviceStorageCompanySearch"
+                  name="deviceStorageCompanySearch"
+                  type="search"
+                  value={previousReceiptsCompanySearch}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPreviousReceiptsCompanySearch(e.target.value)}
+                  placeholder="Search by company name"
+                />
+              </div>
+              {isLoadingPreviousReceipts && previousReceipts.length > 0 && (
+                <p className="mb-3 text-center text-xs text-gray-300">Updating results...</p>
+              )}
               {previousReceiptsError && <p role="alert" className="text-center text-red-400 bg-red-900/50 p-3 rounded">{previousReceiptsError}</p>}
-              {!isLoadingPreviousReceipts && !previousReceiptsError && (
-                <div className="overflow-y-auto flex-grow">
+              {!previousReceiptsError && (
+                <div className={`overflow-y-auto flex-grow max-h-[50vh] pr-1 transition-opacity duration-150 ${isLoadingPreviousReceipts && previousReceipts.length > 0 ? 'opacity-70' : 'opacity-100'}`}>
                   {previousReceipts.length === 0 ? (
-                    <p className="text-center text-gray-400 py-4">No previous receipts found for {selectedLocation?.name || 'this location'}.</p>
+                    <p className="text-center text-gray-400 py-4">
+                      {isLoadingPreviousReceipts ? 'Loading previous receipts...' : `No previous receipts found for ${selectedLocation?.name || 'this location'}.`}
+                    </p>
                   ) : (
                     <ul className="space-y-3">
                       {previousReceipts.map((receipt) => (
                         <li key={receipt.id} className="bg-slate-700 bg-opacity-70 backdrop-blur-sm p-4 rounded-md flex justify-between items-center">
                           <div>
+                            <p className="text-sm text-gray-300">Company: <span className="font-semibold text-gray-100">{receipt.submitter_company_name || 'N/A'}</span></p>
                             <p className="text-sm text-gray-300">Date: <span className="font-semibold text-gray-100">{formatModalDate(receipt.date)}</span></p>
                             <p className="text-sm text-gray-300">Submitter: <span className="font-semibold text-gray-100">{receipt.submitter_name}</span></p>
                             {receipt.updated_at && <p className="text-xs text-gray-400">Last Updated: {new Date(receipt.updated_at).toLocaleString()}</p>}

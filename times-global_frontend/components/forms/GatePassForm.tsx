@@ -80,6 +80,7 @@ const GatePassForm: React.FC<GatePassFormProps> = ({ onLogout }) => {
   const [previousPasses, setPreviousPasses] = useState<GatePassResponseData[]>([]);
   const [isLoadingPreviousPasses, setIsLoadingPreviousPasses] = useState<boolean>(false);
   const [previousPassesError, setPreviousPassesError] = useState<string | null>(null);
+  const [previousPassesRecipientSearch, setPreviousPassesRecipientSearch] = useState<string>('');
   
   const [loadingActionId, setLoadingActionId] = useState<string | null>(null); // For View/Reprint loading
   const [actionTypeForLoading, setActionTypeForLoading] = useState<'View' | 'Reprint' | null>(null);
@@ -340,17 +341,22 @@ const GatePassForm: React.FC<GatePassFormProps> = ({ onLogout }) => {
   };
 
 
-  const fetchPreviousPasses = async () => {
+  const fetchPreviousPasses = async (recipientSearch = previousPassesRecipientSearch) => {
     if (!selectedLocation?.id) return;
     setIsLoadingPreviousPasses(true);
     setPreviousPassesError(null);
     try {
-      const response = await apiService.get<ApiResponse<GatePassResponseData>>('/gate-passes/');
+      const queryParams = new URLSearchParams();
+      const trimmedRecipientSearch = recipientSearch.trim();
+      if (trimmedRecipientSearch) {
+        queryParams.set('recipient_name', trimmedRecipientSearch);
+      }
+      const endpoint = queryParams.toString() ? `/gate-passes/?${queryParams.toString()}` : '/gate-passes/';
+      const response = await apiService.get<ApiResponse<GatePassResponseData>>(endpoint);
       setPreviousPasses(response?.results || []); 
     } catch (err: any) {
       console.error('Fetch Previous Passes Error:', err);
       setPreviousPassesError(err.message || 'Failed to fetch previous gate passes.');
-      setPreviousPasses([]);
     } finally {
       setIsLoadingPreviousPasses(false);
     }
@@ -358,10 +364,17 @@ const GatePassForm: React.FC<GatePassFormProps> = ({ onLogout }) => {
 
   const handleTogglePreviousPassesModal = () => {
     setShowPreviousPassesModal(prev => !prev);
-    if (!showPreviousPassesModal && selectedLocation?.id) { 
-      fetchPreviousPasses();
-    }
   };
+
+  useEffect(() => {
+    if (!showPreviousPassesModal || !selectedLocation?.id) return;
+
+    const timeoutId = window.setTimeout(() => {
+      fetchPreviousPasses(previousPassesRecipientSearch);
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [showPreviousPassesModal, selectedLocation?.id, previousPassesRecipientSearch]);
 
   const loadAndShowPass = async (passId: string, actionType: 'View' | 'Reprint') => {
     setActionTypeForLoading(actionType);
@@ -489,7 +502,7 @@ const GatePassForm: React.FC<GatePassFormProps> = ({ onLogout }) => {
                 className="bg-teal-600 hover:bg-teal-700"
                 disabled={!selectedLocation}
               >
-                View Previous Passes
+                View / Search Previous Passes
               </Button>
             </div>
             
@@ -628,12 +641,27 @@ const GatePassForm: React.FC<GatePassFormProps> = ({ onLogout }) => {
                   <h3 id="previousPassesModalTitle" className="text-2xl font-semibold text-red-500">Previous Gate Passes</h3>
                   <Button type="button" onClick={handleTogglePreviousPassesModal} variant="secondary" className="!p-2">&times;</Button>
               </div>
-              {isLoadingPreviousPasses && <p className="text-center text-gray-300">Loading previous passes...</p>}
+              <div className="mb-4">
+                <label htmlFor="gatePassRecipientSearch" className="block text-sm font-medium text-gray-300 mb-1">Search by recipient name</label>
+                <Input
+                  id="gatePassRecipientSearch"
+                  name="gatePassRecipientSearch"
+                  type="search"
+                  value={previousPassesRecipientSearch}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPreviousPassesRecipientSearch(e.target.value)}
+                  placeholder="Search by recipient name"
+                />
+              </div>
+              {isLoadingPreviousPasses && previousPasses.length > 0 && (
+                <p className="mb-3 text-center text-xs text-gray-300">Updating results...</p>
+              )}
               {previousPassesError && <p role="alert" className="text-center text-red-400 bg-red-900/50 p-3 rounded">{previousPassesError}</p>}
-              {!isLoadingPreviousPasses && !previousPassesError && (
-                <div className="overflow-y-auto flex-grow">
+              {!previousPassesError && (
+                <div className={`overflow-y-auto flex-grow max-h-[50vh] pr-1 transition-opacity duration-150 ${isLoadingPreviousPasses && previousPasses.length > 0 ? 'opacity-70' : 'opacity-100'}`}>
                   {previousPasses.length === 0 ? (
-                    <p className="text-center text-gray-400 py-4">No previous gate passes found for {selectedLocation?.name || 'this location'}.</p>
+                    <p className="text-center text-gray-400 py-4">
+                      {isLoadingPreviousPasses ? 'Loading previous passes...' : `No previous gate passes found for ${selectedLocation?.name || 'this location'}.`}
+                    </p>
                   ) : (
                     <ul className="space-y-3">
                       {previousPasses.map((pass) => (
