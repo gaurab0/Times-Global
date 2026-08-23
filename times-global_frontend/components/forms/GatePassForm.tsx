@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import Input from '../common/Input';
 import Button from '../common/Button';
 import { apiService } from '../../services/apiService';
+import { ApiResponse, formatDateShort } from '../../services/apiUtils';
+import { getSubmissionErrorMessage } from '../../services/formErrorUtils';
 import PrintableGatePass from './PrintableGatePass'; 
+import PreviousRecordsModal from './PreviousRecordsModal';
 import { LocationContext } from '../LocationContext'; 
 
 interface GatePassFormProps {
@@ -39,11 +42,6 @@ interface GatePassResponseData {
   location_id?: string | number; 
   created_at?: string;
   updated_at?: string;
-}
-
-interface ApiResponse<T> {
-  results?: T[];
-  [key: string]: any;
 }
 
 
@@ -215,25 +213,7 @@ const GatePassForm: React.FC<GatePassFormProps> = ({ onLogout }) => {
       }
     } catch (err: any) {
       console.error('Gate Pass Form Submission Error:', err);
-      const errorMessage = err.data?.detail || err.message || 'Failed to submit gate pass form.';
-      if (err.status === 500) {
-        setError(`Internal Server Error. Please check backend logs. Details: ${errorMessage}`);
-      } else if (err.data) { 
-        const fieldErrors = Object.entries(err.data).map(([key, value]) => {
-            if (key === 'items' && Array.isArray(value)) {
-                return value.map((itemError: any, index: number) => 
-                    Object.entries(itemError).map(([itemKey, itemVal]) => 
-                        `Item ${index+1} ${itemKey}: ${ (Array.isArray(itemVal) ? itemVal.join(', ') : String(itemVal))}`
-                    ).join('; ')
-                ).join(' | ');
-            }
-            return `${key}: ${(Array.isArray(value) ? value.join(', ') : String(value))}`;
-        }).join(' ');
-        setError(fieldErrors || errorMessage);
-      }
-      else {
-        setError(errorMessage);
-      }
+      setError(getSubmissionErrorMessage(err, 'Failed to submit gate pass form.'));
     } finally {
       setIsLoading(false);
     }
@@ -418,17 +398,6 @@ const GatePassForm: React.FC<GatePassFormProps> = ({ onLogout }) => {
     loadAndShowPass(passId, 'Reprint');
   };
   
-  const formatModalDate = (isoDate: string) => {
-    try {
-      return new Date(isoDate).toLocaleDateString('en-GB', {
-        day: '2-digit', month: 'short', year: 'numeric'
-      });
-    } catch {
-      return isoDate;
-    }
-  };
-
-
   if (showPrintPreview && submittedGatePassData) {
     return (
       <div className="bg-gray-100 py-10 px-4 gate-pass-print-preview-wrapper"> 
@@ -626,81 +595,28 @@ const GatePassForm: React.FC<GatePassFormProps> = ({ onLogout }) => {
         </main>
 
         {showPreviousPassesModal && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-            onClick={handleTogglePreviousPassesModal}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="previousPassesModalTitle"
-          >
-            <div 
-              className="bg-slate-800 bg-opacity-80 backdrop-blur-md p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col"
-              onClick={(e) => e.stopPropagation()} 
-            >
-              <div className="flex justify-between items-center mb-4">
-                  <h3 id="previousPassesModalTitle" className="text-2xl font-semibold text-red-500">Previous Gate Passes</h3>
-                  <Button type="button" onClick={handleTogglePreviousPassesModal} variant="secondary" className="!p-2">&times;</Button>
-              </div>
-              <div className="mb-4">
-                <label htmlFor="gatePassRecipientSearch" className="block text-sm font-medium text-gray-300 mb-1">Search by recipient name</label>
-                <Input
-                  id="gatePassRecipientSearch"
-                  name="gatePassRecipientSearch"
-                  type="search"
-                  value={previousPassesRecipientSearch}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPreviousPassesRecipientSearch(e.target.value)}
-                  placeholder="Search by recipient name"
-                />
-              </div>
-              {isLoadingPreviousPasses && previousPasses.length > 0 && (
-                <p className="mb-3 text-center text-xs text-gray-300">Updating results...</p>
-              )}
-              {previousPassesError && <p role="alert" className="text-center text-red-400 bg-red-900/50 p-3 rounded">{previousPassesError}</p>}
-              {!previousPassesError && (
-                <div className={`overflow-y-auto flex-grow max-h-[50vh] pr-1 transition-opacity duration-150 ${isLoadingPreviousPasses && previousPasses.length > 0 ? 'opacity-70' : 'opacity-100'}`}>
-                  {previousPasses.length === 0 ? (
-                    <p className="text-center text-gray-400 py-4">
-                      {isLoadingPreviousPasses ? 'Loading previous passes...' : `No previous gate passes found for ${selectedLocation?.name || 'this location'}.`}
-                    </p>
-                  ) : (
-                    <ul className="space-y-3">
-                      {previousPasses.map((pass) => (
-                        <li key={pass.id} className="bg-slate-700 bg-opacity-70 backdrop-blur-sm p-4 rounded-md flex justify-between items-center">
-                          <div>
-                            <p className="text-sm text-gray-300">Date: <span className="font-semibold text-gray-100">{formatModalDate(pass.pass_date)}</span></p>
-                            <p className="text-sm text-gray-300">Recipient: <span className="font-semibold text-gray-100">{pass.recipient_name}</span></p>
-                             {pass.updated_at && <p className="text-xs text-gray-400">Last Updated: {new Date(pass.updated_at).toLocaleString()}</p>}
-                          </div>
-                          <div className="flex space-x-2">
-                            <Button 
-                                type="button"
-                                onClick={() => handleViewPass(pass.id)} 
-                                className="!px-3 !py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white"
-                                disabled={loadingActionId === pass.id}
-                              >
-                                {loadingActionId === pass.id && actionTypeForLoading === 'View' ? 'Loading...' : 'View'}
-                            </Button>
-                            <Button 
-                              type="button"
-                              onClick={() => handleReprintPass(pass.id)} 
-                              variant="primary" 
-                              className="!px-3 !py-1.5 text-sm" 
-                              disabled={loadingActionId === pass.id}
-                            >
-                              {loadingActionId === pass.id && actionTypeForLoading === 'Reprint' ? 'Loading...' : 'Reprint'}
-                            </Button>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-              <div className="mt-4 text-right">
-                  <Button type="button" onClick={handleTogglePreviousPassesModal} variant="secondary">Close</Button>
-              </div>
-            </div>
-          </div>
+          <PreviousRecordsModal
+            modalTitle="Previous Gate Passes"
+            searchInputLabel="Search by recipient name"
+            searchInputId="gatePassRecipientSearch"
+            searchValue={previousPassesRecipientSearch}
+            onSearchChange={setPreviousPassesRecipientSearch}
+            records={previousPasses}
+            isLoading={isLoadingPreviousPasses}
+            error={previousPassesError}
+            emptyMessage={`No previous gate passes found for ${selectedLocation?.name || 'this location'}.`}
+            loadingRecordId={loadingActionId}
+            actionTypeForLoading={actionTypeForLoading}
+            onView={handleViewPass}
+            onReprint={handleReprintPass}
+            onClose={handleTogglePreviousPassesModal}
+            renderRecordDetails={(pass) => (
+              <>
+                <p className="text-sm text-gray-300">Date: <span className="font-semibold text-gray-100">{formatDateShort(pass.pass_date)}</span></p>
+                <p className="text-sm text-gray-300">Recipient: <span className="font-semibold text-gray-100">{pass.recipient_name}</span></p>
+              </>
+            )}
+          />
         )}
 
         <footer className="bg-slate-800 bg-opacity-70 backdrop-blur-md p-4 text-center text-gray-300 text-sm mt-auto no-print">

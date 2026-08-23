@@ -151,62 +151,52 @@ const VMSAddRecordPage: React.FC = () => {
     setFormData((prev: FormData) => ({ ...prev, [name]: value }));
   };
 
-  const fetchPreRegisteredUserDetails = useCallback(async (name: string) => {
-    if (!name.trim()) {
-        setIsUserPreRegistered(false); 
-        setFormData((prev: FormData) => ({
-            ...prev,
-            idNumberType: '',
-            contact: '',
-            email: '',
-        }));
-        return;
-    }
-    setUserLookupError(null);
-    setIsUserPreRegistered(null); 
+  const findExactRegisteredUser = useCallback(async (name: string): Promise<PreRegisteredUser | null> => {
     try {
       // Image search endpoint should not be location-scoped by default as images are global
       const data = await apiService.get<PreRegisteredUser[] | ApiResponse<PreRegisteredUser>>(`/images/?search=${encodeURIComponent(name)}`);
       const users: PreRegisteredUser[] = Array.isArray(data) ? data : (data?.results || []);
-      
-      if (users.length > 0) {
-        const foundUser = users[0];
-        applyRegisteredUserToForm({ ...foundUser, fullName: name });
-      } else {
-        setUserLookupError(`User '${name}' not found or not pre-registered. Please register first for auto-filled details, or proceed with manual entry.`);
-        setFormData((prev: FormData) => ({
-            ...prev,
-            idNumberType: '',
-            contact: '',
-            email: '',
-        }));
-        setIsUserPreRegistered(false);
-      }
-    } catch (err: any) {
-      console.error('User lookup error:', err);
-      setUserLookupError(`Error looking up user: ${err.message}. Proceed with manual entry.`);
-      setIsUserPreRegistered(false);
+      return (
+        users.find(
+          (user: PreRegisteredUser) =>
+            user.fullName.trim().toLowerCase() === name.trim().toLowerCase()
+        ) ?? null
+      );
+    } catch (err) {
+      console.error('Exact user lookup error:', err);
+      return null;
     }
-  }, [applyRegisteredUserToForm]);
+  }, []);
 
   const handleFullNameBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    const currentFullName = e.target.value;
+    const currentFullName = e.target.value.trim();
     window.setTimeout(() => setShowUserSuggestions(false), 150);
     if (isUserPreRegistered === true) {
       return;
     }
-    if (currentFullName.trim()) { 
-        fetchPreRegisteredUserDetails(currentFullName.trim());
-    } else { 
-        setIsUserPreRegistered(false);
-        setUserLookupError(null);
-        setFormData((prev: FormData) => ({
-            ...prev,
-            idNumberType: '',
-            contact: '',
-            email: '',
-        }));
+    if (!currentFullName) {
+      setIsUserPreRegistered(false);
+      return;
     }
+
+    // Auto-fill ONLY on an exact (case-insensitive) full-name match with a
+    // registered record — never on partial/initial input. Suggestion clicks
+    // are handled separately in applyRegisteredUserToForm.
+    const exactInSuggestions = userSuggestions.find(
+      (user: PreRegisteredUser) =>
+        user.fullName.trim().toLowerCase() === currentFullName.toLowerCase()
+    );
+    if (exactInSuggestions) {
+      applyRegisteredUserToForm(exactInSuggestions);
+      return;
+    }
+
+    void findExactRegisteredUser(currentFullName).then((exactMatch) => {
+      if (exactMatch) {
+        applyRegisteredUserToForm(exactMatch);
+      }
+      // No exact match: leave the manually entered details untouched.
+    });
   };
 
 

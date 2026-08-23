@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import Input from '../common/Input';
 import Button from '../common/Button';
 import { apiService } from '../../services/apiService';
+import { ApiResponse, formatDateShort } from '../../services/apiUtils';
+import { getSubmissionErrorMessage } from '../../services/formErrorUtils';
 import PrintableDeviceStorage from './PrintableDeviceStorage'; 
+import PreviousRecordsModal from './PreviousRecordsModal';
 import { LocationContext } from '../LocationContext'; 
 
 interface DeviceStorageFormProps {
@@ -42,11 +45,6 @@ interface DeviceStorageResponseData {
   location_id?: string | number; 
   created_at?: string;
   updated_at?: string;
-}
-
-interface ApiResponse<T> {
-  results?: T[];
-  [key: string]: any;
 }
 
 
@@ -220,25 +218,7 @@ const DeviceStorageForm: React.FC<DeviceStorageFormProps> = ({ onLogout }) => {
       }
     } catch (err: any) {
       console.error('Device Storage Form Submission Error:', err);
-      const errorMessage = err.data?.detail || err.message || 'Failed to submit device storage form.';
-      if (err.status === 500) {
-        setError(`Internal Server Error. Please check backend logs. Details: ${errorMessage}`);
-      } else if (err.data) { 
-        const fieldErrors = Object.entries(err.data).map(([key, value]) => {
-            if (key === 'items' && Array.isArray(value)) {
-                return value.map((itemError: any, index: number) => 
-                    Object.entries(itemError).map(([itemKey, itemValue]) => 
-                        `Item ${index+1} ${itemKey}: ${ (Array.isArray(itemValue) ? itemValue.join(', ') : String(itemValue))}`
-                    ).join('; ')
-                ).join(' | ');
-            }
-            return `${key}: ${(Array.isArray(value) ? value.join(', ') : String(value))}`;
-        }).join(' ');
-        setError(fieldErrors || errorMessage);
-      }
-      else {
-        setError(errorMessage);
-      }
+      setError(getSubmissionErrorMessage(err, 'Failed to submit device storage form.'));
     } finally {
       setIsLoading(false);
     }
@@ -428,17 +408,6 @@ const DeviceStorageForm: React.FC<DeviceStorageFormProps> = ({ onLogout }) => {
   
   const handleReprintReceipt = (receiptId: string) => {
     loadAndShowReceipt(receiptId, 'Reprint');
-  };
-
-
-  const formatModalDate = (isoDate: string) => {
-    try {
-      return new Date(isoDate).toLocaleDateString('en-GB', {
-        day: '2-digit', month: 'short', year: 'numeric'
-      });
-    } catch {
-      return isoDate;
-    }
   };
 
 
@@ -648,82 +617,29 @@ const DeviceStorageForm: React.FC<DeviceStorageFormProps> = ({ onLogout }) => {
         </main>
 
         {showPreviousReceiptsModal && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-            onClick={handleTogglePreviousReceiptsModal}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="previousReceiptsModalTitle"
-          >
-            <div 
-              className="bg-slate-800 bg-opacity-80 backdrop-blur-md p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col"
-              onClick={(e) => e.stopPropagation()} 
-            >
-              <div className="flex justify-between items-center mb-4">
-                  <h3 id="previousReceiptsModalTitle" className="text-2xl font-semibold text-red-500">Previous Device Storage Receipts</h3>
-                  <Button type="button" onClick={handleTogglePreviousReceiptsModal} variant="secondary" className="!p-2">×</Button>
-              </div>
-              <div className="mb-4">
-                <label htmlFor="deviceStorageCompanySearch" className="block text-sm font-medium text-gray-300 mb-1">Search by company name</label>
-                <Input
-                  id="deviceStorageCompanySearch"
-                  name="deviceStorageCompanySearch"
-                  type="search"
-                  value={previousReceiptsCompanySearch}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPreviousReceiptsCompanySearch(e.target.value)}
-                  placeholder="Search by company name"
-                />
-              </div>
-              {isLoadingPreviousReceipts && previousReceipts.length > 0 && (
-                <p className="mb-3 text-center text-xs text-gray-300">Updating results...</p>
-              )}
-              {previousReceiptsError && <p role="alert" className="text-center text-red-400 bg-red-900/50 p-3 rounded">{previousReceiptsError}</p>}
-              {!previousReceiptsError && (
-                <div className={`overflow-y-auto flex-grow max-h-[50vh] pr-1 transition-opacity duration-150 ${isLoadingPreviousReceipts && previousReceipts.length > 0 ? 'opacity-70' : 'opacity-100'}`}>
-                  {previousReceipts.length === 0 ? (
-                    <p className="text-center text-gray-400 py-4">
-                      {isLoadingPreviousReceipts ? 'Loading previous receipts...' : `No previous receipts found for ${selectedLocation?.name || 'this location'}.`}
-                    </p>
-                  ) : (
-                    <ul className="space-y-3">
-                      {previousReceipts.map((receipt) => (
-                        <li key={receipt.id} className="bg-slate-700 bg-opacity-70 backdrop-blur-sm p-4 rounded-md flex justify-between items-center">
-                          <div>
-                            <p className="text-sm text-gray-300">Company: <span className="font-semibold text-gray-100">{receipt.submitter_company_name || 'N/A'}</span></p>
-                            <p className="text-sm text-gray-300">Date: <span className="font-semibold text-gray-100">{formatModalDate(receipt.date)}</span></p>
-                            <p className="text-sm text-gray-300">Submitter: <span className="font-semibold text-gray-100">{receipt.submitter_name}</span></p>
-                            {receipt.updated_at && <p className="text-xs text-gray-400">Last Updated: {new Date(receipt.updated_at).toLocaleString()}</p>}
-                          </div>
-                          <div className="flex space-x-2">
-                            <Button 
-                                type="button"
-                                onClick={() => handleViewReceipt(receipt.id)} 
-                                className="!px-3 !py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white"
-                                disabled={loadingActionId === receipt.id}
-                              >
-                                {loadingActionId === receipt.id && actionTypeForLoading === 'View' ? 'Loading...' : 'View'}
-                            </Button>
-                            <Button 
-                              type="button"
-                              onClick={() => handleReprintReceipt(receipt.id)} 
-                              variant="primary" 
-                              className="!px-3 !py-1.5 text-sm"
-                              disabled={loadingActionId === receipt.id}
-                            >
-                              {loadingActionId === receipt.id && actionTypeForLoading === 'Reprint' ? 'Loading...' : 'Reprint'}
-                            </Button>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-              <div className="mt-4 text-right">
-                  <Button type="button" onClick={handleTogglePreviousReceiptsModal} variant="secondary">Close</Button>
-              </div>
-            </div>
-          </div>
+          <PreviousRecordsModal
+            modalTitle="Previous Device Storage Receipts"
+            searchInputLabel="Search by company name"
+            searchInputId="deviceStorageCompanySearch"
+            searchValue={previousReceiptsCompanySearch}
+            onSearchChange={setPreviousReceiptsCompanySearch}
+            records={previousReceipts}
+            isLoading={isLoadingPreviousReceipts}
+            error={previousReceiptsError}
+            emptyMessage={`No previous receipts found for ${selectedLocation?.name || 'this location'}.`}
+            loadingRecordId={loadingActionId}
+            actionTypeForLoading={actionTypeForLoading}
+            onView={handleViewReceipt}
+            onReprint={handleReprintReceipt}
+            onClose={handleTogglePreviousReceiptsModal}
+            renderRecordDetails={(receipt) => (
+              <>
+                <p className="text-sm text-gray-300">Company: <span className="font-semibold text-gray-100">{receipt.submitter_company_name || 'N/A'}</span></p>
+                <p className="text-sm text-gray-300">Date: <span className="font-semibold text-gray-100">{formatDateShort(receipt.date)}</span></p>
+                <p className="text-sm text-gray-300">Submitter: <span className="font-semibold text-gray-100">{receipt.submitter_name}</span></p>
+              </>
+            )}
+          />
         )}
 
         <footer className="bg-slate-800 bg-opacity-70 backdrop-blur-md p-4 text-center text-gray-300 text-sm mt-auto no-print">

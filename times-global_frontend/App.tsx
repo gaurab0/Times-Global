@@ -41,7 +41,7 @@ const App: React.FC = () => {
     return <div className="flex items-center justify-center h-screen bg-gray-900 text-white">Loading Authentication...</div>;
   }
 
-  const ProtectedRoute: React.FC<{ children: JSX.Element }> = ({ children }) => {
+  const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (!isAuthenticated) {
       return <Navigate to="/login" replace />;
     }
@@ -63,7 +63,7 @@ const App: React.FC = () => {
     return children;
   };
   
-  const AuthRoute: React.FC<{ children: JSX.Element }> = ({ children }) => {
+  const AuthRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (isAuthenticated) {
        if (!isApprovedByAdmin) return <Navigate to="/pending-approval" replace />;
        if (!authorizedLocations || authorizedLocations.length === 0) return <Navigate to="/no-locations-assigned" replace />;
