@@ -123,9 +123,11 @@ const PrintableGatePass: React.FC<PrintableGatePassProps> = ({ gatePassData }) =
           <span style={{...lineStyleBase, borderBottom: '1px solid black', width: 'calc(100% - 55px)'}} className="print-recipient-address">{recipient_address}</span>
         </div>
 
-        <table className="w-full border-collapse border border-black mb-3 print-table text-[8pt]"> {/* Table font size 8pt */}
+        {/* Table font size 8pt */}
+        <table className="w-full border-collapse border border-black mb-3 print-table text-[8pt]">
           <thead>
-            <tr className="print-table-header bg-gray-100"> {/* Added bg-gray-100 for preview highlight */}
+            {/* Added bg-gray-100 for preview highlight */}
+            <tr className="print-table-header bg-gray-100">
               <th className="border border-black p-1 font-semibold w-[8%] text-center">S.N no</th>
               <th className="border border-black p-1 font-semibold w-[22%] text-center">Item</th>
               <th className="border border-black p-1 font-semibold w-[30%] text-center">Description</th>

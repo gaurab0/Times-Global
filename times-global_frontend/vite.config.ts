@@ -44,6 +44,13 @@ export default defineConfig(() => {
             target: process.env.VITE_BACKEND_ORIGIN || 'http://127.0.0.1:8000',
             changeOrigin: true,
           },
+          // Serve uploaded media (visitor photos etc.) from Django in dev;
+          // without this, /media/* hits Vite's SPA fallback and returns
+          // index.html instead of the file, breaking every <img>.
+          '/media': {
+            target: process.env.VITE_BACKEND_ORIGIN || 'http://127.0.0.1:8000',
+            changeOrigin: true,
+          },
         },
         headers: { 
           'Content-Security-Policy': cspDirectives

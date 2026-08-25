@@ -2,7 +2,14 @@ import os
 from pathlib import Path
 from datetime import timedelta
 
+from dotenv import load_dotenv
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load <project_root>/.env before any os.environ.get(...) below.
+# Real environment variables still take precedence over .env values.
+load_dotenv(BASE_DIR / '.env')
+
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-your-default-secret-key-here-for-locations')
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '111.119.60.23','192.168.55.193']
@@ -154,3 +161,19 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken', # If using CSRF for non-API parts or session auth alongside JWT
     'location-id', # Example custom header frontend might send for selected location
 ]
+
+# --- Gate pass email notification (SMTP) ---
+# All credentials come from environment variables; never hardcode them here.
+# Tests override EMAIL_BACKEND to locmem via vms_project/test_settings.py.
+EMAIL_BACKEND = os.environ.get(
+    'DJANGO_EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend'
+)
+EMAIL_HOST = os.environ.get('GATEPASS_EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('GATEPASS_EMAIL_PORT', '587'))
+EMAIL_HOST_USER = os.environ.get('GATEPASS_EMAIL_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('GATEPASS_EMAIL_PASSWORD', '')
+EMAIL_USE_TLS = True
+DEFAULT_FROM_EMAIL = os.environ.get('GATEPASS_EMAIL_USER', 'webmaster@localhost')
+
+# Recipient of the gate pass copy (the manager's dedicated inbox).
+GATEPASS_MANAGER_EMAIL = os.environ.get('GATEPASS_MANAGER_EMAIL', '')

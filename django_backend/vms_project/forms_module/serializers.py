@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import DeviceStorageEntry, DeviceStorageItem, GatePass, GatePassItem
+from .emails import send_gatepass_email
 from locations.models import Location 
 from locations.serializers import LocationSerializer 
 from datetime import date, datetime 
@@ -102,6 +103,12 @@ class GatePassSerializer(serializers.ModelSerializer):
         print(f"DEBUG (Serializer Create): Gate pass ID {gate_pass.id}, pass_date type: {type(gate_pass.pass_date)}, value: {gate_pass.pass_date}")
         for item_data in items_data:
             GatePassItem.objects.create(gate_pass=gate_pass, **item_data)
+
+        # Fire exactly once per issued pass, after the row and its items are
+        # saved. send_gatepass_email never raises, so issuance can't fail
+        # because of the notification.
+        send_gatepass_email(gate_pass)
+
         return gate_pass
     
     def update(self, instance, validated_data):

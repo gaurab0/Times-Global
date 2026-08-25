@@ -12,6 +12,7 @@ db.sqlite3-journal
 media/
 local_settings.py
 staticfiles/
+.env
 
 # Virtualenv
 .venv/
