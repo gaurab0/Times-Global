@@ -175,5 +175,23 @@ EMAIL_HOST_PASSWORD = os.environ.get('GATEPASS_EMAIL_PASSWORD', '')
 EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = os.environ.get('GATEPASS_EMAIL_USER', 'webmaster@localhost')
 
+# --- SMTP transport encryption guard ---
+# Fail loudly at startup if the SMTP backend is configured without TLS,
+# so operators cannot accidentally deploy a config that would send email
+# in plaintext. (Django itself says nothing; an attacker or misconfigured
+# network could intercept the traffic.)
+_EMAIL_SMTP_TLS_GUARD = (
+    EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend'
+    and not EMAIL_USE_TLS
+    and not EMAIL_USE_SSL
+)
+if _EMAIL_SMTP_TLS_GUARD:
+    raise ImproperlyConfigured(
+        "EMAIL_BACKEND is set to the SMTP backend but neither "
+        "EMAIL_USE_TLS nor EMAIL_USE_SSL is True. "
+        "Email would be sent in plaintext; adjust your email settings "
+        "before deploying."
+    )
+
 # Recipient of the gate pass copy (the manager's dedicated inbox).
 GATEPASS_MANAGER_EMAIL = os.environ.get('GATEPASS_MANAGER_EMAIL', '')
