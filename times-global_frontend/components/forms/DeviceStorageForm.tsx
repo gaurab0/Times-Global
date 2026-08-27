@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react'; 
+import React, { useState, useEffect, useContext, useRef, useCallback } from 'react'; 
 import { useNavigate } from 'react-router-dom';
 import Input from '../common/Input';
 import Button from '../common/Button';
@@ -82,6 +82,12 @@ const DeviceStorageForm: React.FC<DeviceStorageFormProps> = ({ onLogout }) => {
   const [isLoadingPreviousReceipts, setIsLoadingPreviousReceipts] = useState<boolean>(false);
   const [previousReceiptsError, setPreviousReceiptsError] = useState<string | null>(null);
   const [previousReceiptsCompanySearch, setPreviousReceiptsCompanySearch] = useState<string>('');
+  // Pagination state
+  const [previousReceiptsNextUrl, setPreviousReceiptsNextUrl] = useState<string | null>(null);
+  // const [previousReceiptsCount, setPreviousReceiptsCount] = useState<number>(0);
+  const [isLoadingMoreReceipts, setIsLoadingMoreReceipts] = useState<boolean>(false);
+  // Used to cancel stale requests when search changes
+  const previousReceiptsFetchId = useRef(0);
   
   const [loadingActionId, setLoadingActionId] = useState<string | null>(null); // For View/Reprint loading
   const [actionTypeForLoading, setActionTypeForLoading] = useState<'View' | 'Reprint' | null>(null);
@@ -333,29 +339,89 @@ const DeviceStorageForm: React.FC<DeviceStorageFormProps> = ({ onLogout }) => {
   };
 
 
-  const fetchPreviousReceipts = async (companySearch = previousReceiptsCompanySearch) => {
+  // FIX: wrapped in useCallback so this function keeps a stable identity across
+  // renders. Previously it was a plain function recreated on every render, which
+  // meant the useEffect below (which lists it as a dependency) reran on every
+  // render too -> refetch -> state update -> re-render -> new function -> refetch
+  // ...an infinite loop. Only recreate this when the values it actually depends
+  // on for its default param / auth scoping change.
+  const fetchPreviousReceipts = useCallback(async (companySearch = previousReceiptsCompanySearch, nextUrl?: string) => {
     if (!selectedLocation?.id) return;
-    setIsLoadingPreviousReceipts(true);
+    
+    // If loading the first page (no nextUrl), show the loading indicator
+    if (!nextUrl) {
+      setIsLoadingPreviousReceipts(true);
+    } else {
+      setIsLoadingMoreReceipts(true);
+    }
     setPreviousReceiptsError(null);
+    
+    const fetchId = ++previousReceiptsFetchId.current;
+    
     try {
-      const queryParams = new URLSearchParams();
-      const trimmedCompanySearch = companySearch.trim();
-      if (trimmedCompanySearch) {
-        queryParams.set('company_name', trimmedCompanySearch);
+      let endpoint: string;
+      if (nextUrl) {
+        // Use the next URL directly from the API response (it's a full URL with pagination params)
+        // Extract just the path + query from the full URL
+        const url = new URL(nextUrl);
+        // FIX: Django's pagination `next` field mirrors the incoming request path,
+        // which already includes "/api" — but apiService.get() prepends "/api" itself,
+        // so passing the raw pathname through doubled it: /api/api/device-storage/...
+        // Strip the leading "/api" here so apiService adds it back exactly once.
+        endpoint = (url.pathname + url.search).replace(/^\/api(?=\/|$)/, '');
+      } else {
+        // First page - build query params
+        const queryParams = new URLSearchParams();
+        const trimmedCompanySearch = companySearch.trim();
+        if (trimmedCompanySearch) {
+          queryParams.set('company_name', trimmedCompanySearch);
+        }
+        endpoint = queryParams.toString() ? `/device-storage/?${queryParams.toString()}` : '/device-storage/';
       }
-      const endpoint = queryParams.toString() ? `/device-storage/?${queryParams.toString()}` : '/device-storage/';
+      
       const response = await apiService.get<ApiResponse<DeviceStorageResponseData>>(endpoint);
-      setPreviousReceipts(response?.results || []);
+      
+      // Ignore stale responses
+      if (fetchId !== previousReceiptsFetchId.current) return;
+      
+      if (nextUrl) {
+        // Append to existing records
+        setPreviousReceipts(prev => [...prev, ...(response?.results || [])]);
+      } else {
+        // Replace records for new search
+        setPreviousReceipts(response?.results || []);
+      }
+      setPreviousReceiptsNextUrl(response?.next || null);
+      // setPreviousReceiptsCount(response?.count || 0);
     } catch (err: any) {
+      if (fetchId !== previousReceiptsFetchId.current) return;
       console.error('Fetch Previous Receipts Error:', err);
       setPreviousReceiptsError(err.message || 'Failed to fetch previous receipts.');
     } finally {
-      setIsLoadingPreviousReceipts(false);
+      if (fetchId === previousReceiptsFetchId.current) {
+        setIsLoadingPreviousReceipts(false);
+        setIsLoadingMoreReceipts(false);
+      }
     }
-  };
+  }, [selectedLocation?.id, previousReceiptsCompanySearch]);
 
   const handleTogglePreviousReceiptsModal = () => {
-    setShowPreviousReceiptsModal(prev => !prev);
+    setShowPreviousReceiptsModal(prev => {
+      const next = !prev;
+      // Reset pagination when opening the modal
+      if (next) {
+        setPreviousReceipts([]);
+        setPreviousReceiptsNextUrl(null);
+        // setPreviousReceiptsCount(0);
+      }
+      return next;
+    });
+  };
+
+  const loadMorePreviousReceipts = () => {
+    if (previousReceiptsNextUrl && !isLoadingMoreReceipts) {
+      fetchPreviousReceipts(previousReceiptsCompanySearch, previousReceiptsNextUrl);
+    }
   };
 
   useEffect(() => {
@@ -366,7 +432,7 @@ const DeviceStorageForm: React.FC<DeviceStorageFormProps> = ({ onLogout }) => {
     }, 300);
 
     return () => window.clearTimeout(timeoutId);
-  }, [showPreviousReceiptsModal, selectedLocation?.id, previousReceiptsCompanySearch]);
+  }, [showPreviousReceiptsModal, selectedLocation?.id, previousReceiptsCompanySearch, fetchPreviousReceipts]);
   
   const loadAndShowReceipt = async (receiptId: string, actionType: 'View' | 'Reprint') => {
     setActionTypeForLoading(actionType);
@@ -639,6 +705,9 @@ const DeviceStorageForm: React.FC<DeviceStorageFormProps> = ({ onLogout }) => {
                 <p className="text-sm text-gray-300">Submitter: <span className="font-semibold text-gray-100">{receipt.submitter_name}</span></p>
               </>
             )}
+            hasMore={!!previousReceiptsNextUrl}
+            isLoadingMore={isLoadingMoreReceipts}
+            onLoadMore={loadMorePreviousReceipts}
           />
         )}
 
