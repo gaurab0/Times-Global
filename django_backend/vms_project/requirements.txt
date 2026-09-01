@@ -7,6 +7,5 @@ Pillow>=11.0,<12.0; python_version >= "3.13"
 django-cors-headers>=3.10,<4.4
 django-filter>=23.2,<25.0 # Added this line
 python-dotenv>=1.0,<2.0 # Loads .env file for local configuration
-# For production, consider adding gunicorn or uvicorn
-# Example: gunicorn>=20.0,<21.0
+gunicorn>=22.0,<24.0
 

@@ -1,0 +1,10 @@
+services:
+  frontend:
+    image: frontend
+    build:
+      context: .
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+    ports:
+      - "5173:80"

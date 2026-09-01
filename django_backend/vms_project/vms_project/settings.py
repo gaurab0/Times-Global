@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 from datetime import timedelta
 
+from corsheaders.defaults import default_headers
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -10,9 +12,27 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Real environment variables still take precedence over .env values.
 load_dotenv(BASE_DIR / '.env')
 
+
+def env_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def env_list(name, default):
+    value = os.environ.get(name)
+    if not value:
+        return default
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-your-default-secret-key-here-for-locations')
-DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '111.119.60.23','192.168.55.193']
+DEBUG = env_bool('DJANGO_DEBUG', True)
+ALLOWED_HOSTS = env_list(
+    'DJANGO_ALLOWED_HOSTS',
+    ['localhost', '127.0.0.1', 'backend', '111.119.60.23', '192.168.55.193'],
+)
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -66,11 +86,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'vms_project.wsgi.application'
 
-use_sqlite = os.environ.get('DJANGO_USE_SQLITE')
-if use_sqlite is None:
-    use_sqlite = 'True' if DEBUG else 'False'
-
-if use_sqlite == 'True':
+if env_bool('DJANGO_USE_SQLITE', False):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -81,11 +97,11 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.environ.get('DB_NAME', 'vms_db'), # Consider new DB name or migration strategy
-            'USER': os.environ.get('DB_USER', 'vms_user'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', 'Dell@12345'),
-            'HOST': os.environ.get('DB_HOST', 'localhost'),
-            'PORT': os.environ.get('DB_PORT', '5432'),
+            'NAME': os.environ.get('POSTGRES_DB', os.environ.get('DB_NAME', 'vms_db')),
+            'USER': os.environ.get('POSTGRES_USER', os.environ.get('DB_USER', 'vms_user')),
+            'PASSWORD': os.environ.get('POSTGRES_PASSWORD', os.environ.get('DB_PASSWORD', 'vms_password')),
+            'HOST': os.environ.get('POSTGRES_HOST', os.environ.get('DB_HOST', 'db')),
+            'PORT': os.environ.get('POSTGRES_PORT', os.environ.get('DB_PORT', '5432')),
         }
     }
 
@@ -153,13 +169,14 @@ SIMPLE_JWT = {
     'TOKEN_OBTAIN_SERIALIZER': 'users.serializers.CustomTokenObtainPairSerializer',
 }
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = env_bool('CORS_ALLOW_ALL_ORIGINS', DEBUG)
+CORS_ALLOWED_ORIGINS = env_list(
+    'CORS_ALLOWED_ORIGINS',
+    ['http://localhost:5173', 'http://127.0.0.1:5173'],
+)
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_HEADERS = [
-    'authorization',
-    'content-type',
-    'x-csrftoken', # If using CSRF for non-API parts or session auth alongside JWT
-    'location-id', # Example custom header frontend might send for selected location
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'location-id',
 ]
 
 # --- Gate pass email notification (SMTP) ---
@@ -172,7 +189,8 @@ EMAIL_HOST = os.environ.get('GATEPASS_EMAIL_HOST', '')
 EMAIL_PORT = int(os.environ.get('GATEPASS_EMAIL_PORT', '587'))
 EMAIL_HOST_USER = os.environ.get('GATEPASS_EMAIL_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('GATEPASS_EMAIL_PASSWORD', '')
-EMAIL_USE_TLS = True
+EMAIL_USE_TLS = env_bool('GATEPASS_EMAIL_USE_TLS', True)
+EMAIL_USE_SSL = env_bool('GATEPASS_EMAIL_USE_SSL', False)
 DEFAULT_FROM_EMAIL = os.environ.get('GATEPASS_EMAIL_USER', 'webmaster@localhost')
 
 # --- SMTP transport encryption guard ---
