@@ -1,3 +1,5 @@
+
+
 services:
   db:
     image: postgres:16
@@ -13,7 +15,7 @@ services:
       timeout: 5s
       retries: 5
     ports:
-      - "5432:5432"
+      - "5433:5432"
 
   backend:
     build:
@@ -23,9 +25,9 @@ services:
       - ./django_backend/vms_project:/app
     environment:
       DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend,vms.gaurabchaudhary.com.np}
       CORS_ALLOW_ALL_ORIGINS: ${CORS_ALLOW_ALL_ORIGINS:-True}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,https://vms.gaurabchaudhary.com.np}
       POSTGRES_DB: ${POSTGRES_DB:-vms_db}
       POSTGRES_USER: ${POSTGRES_USER:-vms_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vms_password}
@@ -39,6 +41,7 @@ services:
       GATEPASS_EMAIL_USE_TLS: ${GATEPASS_EMAIL_USE_TLS:-True}
       GATEPASS_EMAIL_USE_SSL: ${GATEPASS_EMAIL_USE_SSL:-False}
       GATEPASS_MANAGER_EMAIL: ${GATEPASS_MANAGER_EMAIL}
+
     depends_on:
       db:
         condition: service_healthy
@@ -50,12 +53,24 @@ services:
     build:
       context: ./times-global_frontend
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000/api}
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api}
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
     depends_on:
       - backend
     ports:
       - "5173:80"
+  nginx:
+    image: nginx:stable
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
 
 volumes:
   postgres_data:
